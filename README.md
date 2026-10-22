@@ -33,6 +33,8 @@ An `ask_user_question` tool for [pi](https://pi.dev). When the model would other
 Requires pi 1.4 or newer.
 
 ```bash
+pi install npm:pi-asker
+# or straight from GitHub
 pi install git:github.com/msvart/pi-asker
 ```
 

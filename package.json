@@ -1,0 +1,22 @@
+{
+  "name": "pi-asker",
+  "version": "1.0.0",
+  "description": "ask_user_question for pi: tabs, multi-select, previews, a review tab, and a way to flag a question for discussion",
+  "keywords": ["pi-package"],
+  "license": "MIT",
+  "author": "msvart",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/msvart/pi-asker.git"
+  },
+  "type": "module",
+  "files": ["extensions", "README.md", "LICENSE"],
+  "pi": {
+    "extensions": ["./extensions/ask-user-question.ts"]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*",
+    "typebox": "*"
+  }
+}

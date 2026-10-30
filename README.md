@@ -26,7 +26,8 @@ An `ask_user_question` tool for [pi](https://pi.dev). When the model would other
 - **Previews** – mockups, code or configs shown next to the options (below them in narrow terminals). Text is kept verbatim; fenced code blocks are syntax highlighted.
 - **Review** – the Submit tab lists every answer, warns about unanswered questions, and takes an optional note for the model.
 - **No hard limits** – the schema only requires one question and two options. The tool description steers the model towards a few short questions instead.
-- **Interactive only** – in print, JSON and RPC mode (and in subagents) the tool is hidden from the model, since there is no one to answer.
+- **RPC hosts** – in RPC mode (e.g. Paseo) the questions are asked one native `select`/`input` dialog at a time; Paseo shows them in its own question form. Discuss, the note and the side-by-side preview are terminal-only.
+- **Interactive only** – in print and JSON mode (and in subagents) the tool is hidden from the model, since there is no one to answer.
 
 ## Install
 

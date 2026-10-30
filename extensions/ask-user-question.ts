@@ -1,4 +1,4 @@
-import { type ExtensionAPI, highlightCode, type Theme } from "@earendil-works/pi-coding-agent";
+import { type ExtensionAPI, type ExtensionContext, highlightCode, type Theme } from "@earendil-works/pi-coding-agent";
 import {
   type Component,
   type Focusable,
@@ -644,11 +644,68 @@ class Dialog implements Component, Focusable {
   }
 }
 
+type DialogUI = Pick<ExtensionContext["ui"], "select" | "input">;
+
+/**
+ * RPC hosts (such as Paseo) cannot render `ui.custom()`, but render `select` and `input`
+ * natively. Walk the questions one dialog at a time. The option lines, the trailing
+ * "Type something." row and the follow-up input match what Paseo's built-in
+ * ask_user_question adapter answers, so Paseo shows its own question form instead.
+ */
+async function askViaDialogs(ui: DialogUI, questions: Question[], signal?: AbortSignal): Promise<Details> {
+  const answers: Answer[] = [];
+  for (const q of questions) {
+    const lines = q.options.map((o, i) => `${i + 1}. ${o.label} — ${o.description}`);
+    const title = `[${q.header}] ${q.question}`;
+    let values: string[] | undefined;
+    if (q.multiSelect) {
+      const reply = await ui.input(
+        `${title}\n\n${lines.join("\n")}\n\nEnter the numbers of all that apply, comma-separated (e.g. "1,3"), or type your own answer.`,
+        "1,3",
+        { signal },
+      );
+      if (reply === undefined) return { answers, cancelled: true };
+      const text = reply.trim();
+      const indices = /^\d+(\s*,\s*\d+)*$/.test(text) ? text.split(",").map((n) => Number(n) - 1) : [];
+      values = indices.length
+        ? q.options.filter((_, i) => indices.includes(i)).map((o) => o.label)
+        : text
+          ? [text]
+          : [];
+    } else {
+      const other = `${q.options.length + 1}. Type something.`;
+      while (!values) {
+        const chosen = await ui.select(title, [...lines, other], { signal });
+        if (chosen === undefined) return { answers, cancelled: true };
+        const index = lines.indexOf(chosen);
+        if (index >= 0) {
+          values = [q.options[index].label];
+        } else if (chosen === other) {
+          // Cancelling or leaving the free-text input empty goes back to the options.
+          const typed = (await ui.input(`${title}\n\nType your answer:`, "", { signal }))?.trim();
+          if (typed) values = [typed];
+        } else if (chosen.trim()) {
+          // Some hosts let the user type a reply instead of picking a line.
+          values = [chosen.trim()];
+        }
+      }
+    }
+    const option = q.multiSelect ? undefined : q.options.find((o) => o.label === values[0]);
+    answers.push({
+      header: q.header,
+      question: q.question,
+      values,
+      ...(option?.preview ? { preview: option.preview } : {}),
+    });
+  }
+  return { answers, cancelled: false };
+}
+
 export default function (pi: ExtensionAPI) {
-  // Without the terminal UI (print, JSON, RPC, subagents) the dialog cannot be shown, so the
-  // model should not see the tool at all. The mode is fixed for the process.
+  // Without any UI (print, JSON, subagents) there is no one to answer, so the model should
+  // not see the tool at all. The mode is fixed for the process.
   pi.on("before_agent_start", (_event, ctx) => {
-    if (ctx.mode === "tui") return;
+    if (ctx.mode === "tui" || ctx.mode === "rpc") return;
     const active = pi.getActiveTools();
     if (active.includes(TOOL_NAME)) pi.setActiveTools(active.filter((name) => name !== TOOL_NAME));
   });
@@ -666,6 +723,10 @@ export default function (pi: ExtensionAPI) {
     prepareArguments: parseArgs,
 
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
+      if (ctx.mode === "rpc") {
+        const details = await askViaDialogs(ctx.ui, params.questions, signal);
+        return { content: [{ type: "text", text: envelope(details) }], details };
+      }
       const details = await ctx.ui.custom<Details>((tui, theme, _keybindings, done) => {
         const dialog = new Dialog(tui, theme, params.questions, done);
         signal?.addEventListener("abort", () => dialog.cancel(), { once: true });
